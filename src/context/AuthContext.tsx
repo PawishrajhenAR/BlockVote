@@ -1,6 +1,5 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { toast } from '@/components/ui/sonner';
+import { toast } from 'sonner';
 
 // Mock Users - In a real app, this would come from a backend
 const MOCK_USERS = [

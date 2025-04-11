@@ -1,7 +1,6 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ethers } from 'ethers';
-import { toast } from '@/components/ui/sonner';
+import { toast } from 'sonner';
 
 // Mock contract ABI & address - In a real app, this would be generated from your Solidity contract
 const MOCK_CONTRACT_ABI = [
