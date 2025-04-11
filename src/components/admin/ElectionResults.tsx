@@ -68,6 +68,7 @@ export function ElectionResults({ candidates, isActive }: ElectionResultsProps) 
 
       {sortedCandidates.map((candidate) => {
         const percentage = totalVotes > 0 ? (candidate.voteCount / totalVotes) * 100 : 0;
+        const isLeading = sortedCandidates[0].id === candidate.id && totalVotes > 0;
         
         return (
           <Card key={candidate.id} className="overflow-hidden">
@@ -75,7 +76,7 @@ export function ElectionResults({ candidates, isActive }: ElectionResultsProps) 
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center">
                   <span className="font-medium">{candidate.name}</span>
-                  {sortedCandidates[0].id === candidate.id && totalVotes > 0 && (
+                  {isLeading && (
                     <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
                       <Award className="h-3 w-3 mr-1" />
                       Leading
@@ -89,11 +90,8 @@ export function ElectionResults({ candidates, isActive }: ElectionResultsProps) 
               <Progress 
                 value={percentage} 
                 className="h-2"
-                indicatorClassName={
-                  sortedCandidates[0].id === candidate.id && totalVotes > 0
-                    ? "bg-blockchain-accent"
-                    : undefined
-                }
+                // Apply special styling conditionally without using an invalid prop
+                className={isLeading ? "h-2 [&>div]:bg-blockchain-accent" : "h-2"}
               />
             </CardContent>
           </Card>

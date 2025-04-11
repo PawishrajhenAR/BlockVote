@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { UserRound, Vote } from "lucide-react";
+import { UserRound, Vote, Wallet, AlertTriangle } from "lucide-react";
+import { useBlockchain } from "@/context/BlockchainContext";
 
 interface Candidate {
   id: number;
@@ -23,15 +24,40 @@ export function CandidateVoteCard({
   disabled,
   hasVoted
 }: CandidateVoteCardProps) {
-  const [isVoting, setIsVoting] = useState(false);
+  const { isVoting } = useBlockchain();
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const handleVote = async () => {
-    setIsVoting(true);
+    setIsConfirming(true);
     try {
       await onVote(candidate.id);
     } finally {
-      setIsVoting(false);
+      setIsConfirming(false);
     }
+  };
+
+  // Determine button text based on state
+  const getButtonContent = () => {
+    if (isConfirming) {
+      return <>Please confirm in MetaMask...</>;
+    }
+    if (isVoting) {
+      return <>Confirming on blockchain...</>;
+    }
+    if (hasVoted) {
+      return (
+        <>
+          <Vote className="mr-1 h-4 w-4" />
+          Voted
+        </>
+      );
+    }
+    return (
+      <>
+        <Wallet className="mr-1 h-4 w-4" />
+        Vote with MetaMask
+      </>
+    );
   };
 
   return (
@@ -49,27 +75,22 @@ export function CandidateVoteCard({
             variant="default"
             size="sm"
             onClick={handleVote}
-            disabled={disabled || isVoting}
+            disabled={disabled || isConfirming || isVoting}
             className={`
               ${hasVoted ? "bg-green-600 hover:bg-green-700" : ""}
-              ${isVoting ? "animate-pulse" : ""}
+              ${isConfirming || isVoting ? "animate-pulse" : ""}
             `}
           >
-            {isVoting ? (
-              "Confirming..."
-            ) : hasVoted ? (
-              <>
-                <Vote className="mr-1 h-4 w-4" />
-                Voted
-              </>
-            ) : (
-              <>
-                <Vote className="mr-1 h-4 w-4" />
-                Vote
-              </>
-            )}
+            {getButtonContent()}
           </Button>
         </div>
+        
+        {isConfirming && (
+          <div className="p-3 bg-amber-50 text-amber-800 border-t border-amber-200 flex items-center text-sm">
+            <AlertTriangle className="h-4 w-4 mr-2" />
+            Please confirm the transaction in your MetaMask wallet to cast your vote
+          </div>
+        )}
       </CardContent>
     </Card>
   );

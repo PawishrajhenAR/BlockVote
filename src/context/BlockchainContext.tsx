@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { toast } from 'sonner';
@@ -5,6 +6,7 @@ import { toast } from 'sonner';
 // Mock contract ABI & address - In a real app, this would be generated from your Solidity contract
 const MOCK_CONTRACT_ABI = [
   "function addCandidate(string memory _name) public",
+  "function removeCandidate(uint256 _candidateId) public",
   "function startElection() public",
   "function endElection() public",
   "function vote(uint256 _candidateId) public",
@@ -28,9 +30,11 @@ interface BlockchainContextType {
   candidates: Candidate[];
   isElectionActive: boolean;
   hasVoted: boolean;
+  isVoting: boolean;
   connectWallet: () => Promise<void>;
   disconnectWallet: () => void;
   addCandidate: (name: string) => Promise<boolean>;
+  removeCandidate: (id: number) => Promise<boolean>;
   startElection: () => Promise<boolean>;
   endElection: () => Promise<boolean>;
   vote: (candidateId: number) => Promise<boolean>;
@@ -55,6 +59,7 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [isElectionActive, setIsElectionActive] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
+  const [isVoting, setIsVoting] = useState(false);
 
   // Initialize web3 when component mounts
   useEffect(() => {
@@ -153,13 +158,36 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
 
     try {
       // Simulate adding a candidate
-      const newId = candidates.length + 1;
+      const newId = Math.max(...candidates.map(c => c.id), 0) + 1;
       setCandidates([...candidates, { id: newId, name, voteCount: 0 }]);
       toast.success(`Added candidate: ${name}`);
       return true;
     } catch (error) {
       console.error("Error adding candidate:", error);
       toast.error("Failed to add candidate");
+      return false;
+    }
+  };
+
+  const removeCandidate = async (id: number): Promise<boolean> => {
+    if (!contract || !signer) {
+      toast.error("Wallet not connected!");
+      return false;
+    }
+
+    if (isElectionActive) {
+      toast.error("Cannot remove candidates during an active election!");
+      return false;
+    }
+
+    try {
+      // Simulate removing a candidate
+      setCandidates(candidates.filter(candidate => candidate.id !== id));
+      toast.success("Candidate removed successfully");
+      return true;
+    } catch (error) {
+      console.error("Error removing candidate:", error);
+      toast.error("Failed to remove candidate");
       return false;
     }
   };
@@ -216,20 +244,47 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
       return false;
     }
 
+    setIsVoting(true);
+
     try {
-      // Simulate vote transaction
+      // In a real app, this would be a contract call that costs gas
+      // Simulate a MetaMask transaction that might fail
+      
+      // Create a simulated transaction
+      const tx = {
+        to: MOCK_CONTRACT_ADDRESS,
+        value: ethers.parseEther("0"), // No ETH sent
+        data: contract.interface.encodeFunctionData("vote", [candidateId]),
+        gasLimit: ethers.getBigInt(100000)
+      };
+      
+      // Send the transaction - this will trigger MetaMask
+      const txResponse = await signer.sendTransaction(tx);
+      
+      // Wait for one confirmation
+      toast.info("Confirming your vote on the blockchain...");
+      await txResponse.wait(1);
+      
+      // Update the UI after confirmation
       const updatedCandidates = candidates.map(c =>
         c.id === candidateId ? { ...c, voteCount: c.voteCount + 1 } : c
       );
       
       setCandidates(updatedCandidates);
       setHasVoted(true);
-      toast.success("Vote cast successfully!");
+      toast.success("Vote cast successfully and recorded on blockchain!");
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error casting vote:", error);
-      toast.error("Failed to cast vote");
+      if (error.code === 4001) {
+        // User rejected the transaction
+        toast.error("You rejected the transaction. Your vote was not recorded.");
+      } else {
+        toast.error("Failed to cast vote. Transaction failed.");
+      }
       return false;
+    } finally {
+      setIsVoting(false);
     }
   };
 
@@ -256,9 +311,11 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
       candidates,
       isElectionActive,
       hasVoted,
+      isVoting,
       connectWallet,
       disconnectWallet,
       addCandidate,
+      removeCandidate,
       startElection,
       endElection,
       vote,
