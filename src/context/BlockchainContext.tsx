@@ -5,13 +5,13 @@ import { toast } from 'sonner';
 
 // Mock contract ABI & address - In a real app, this would be generated from your Solidity contract
 const MOCK_CONTRACT_ABI = [
-  "function addCandidate(string memory _name) public",
+  "function addCandidate(string memory _name, string memory _description) public",
   "function removeCandidate(uint256 _candidateId) public",
   "function startElection() public",
   "function endElection() public",
   "function vote(uint256 _candidateId) public",
   "function getCandidateCount() public view returns (uint256)",
-  "function getCandidate(uint256 _candidateId) public view returns (uint256, string memory, uint256)",
+  "function getCandidate(uint256 _candidateId) public view returns (uint256, string memory, string memory, uint256)",
   "function isElectionActive() public view returns (bool)",
   "function hasVoted(address _voter) public view returns (bool)"
 ];
@@ -21,6 +21,8 @@ const MOCK_CONTRACT_ADDRESS = "0x0000000000000000000000000000000000000000";
 interface Candidate {
   id: number;
   name: string;
+  description: string;
+  image: string;
   voteCount: number;
 }
 
@@ -33,7 +35,7 @@ interface BlockchainContextType {
   isVoting: boolean;
   connectWallet: () => Promise<void>;
   disconnectWallet: () => void;
-  addCandidate: (name: string) => Promise<boolean>;
+  addCandidate: (name: string, description: string, image: string) => Promise<boolean>;
   removeCandidate: (id: number) => Promise<boolean>;
   startElection: () => Promise<boolean>;
   endElection: () => Promise<boolean>;
@@ -42,13 +44,6 @@ interface BlockchainContextType {
 }
 
 const BlockchainContext = createContext<BlockchainContextType | undefined>(undefined);
-
-// Mock candidates for development
-const MOCK_CANDIDATES: Candidate[] = [
-  { id: 1, name: "Alice", voteCount: 5 },
-  { id: 2, name: "Bob", voteCount: 3 },
-  { id: 3, name: "Charlie", voteCount: 7 }
-];
 
 export const BlockchainProvider = ({ children }: { children: React.ReactNode }) => {
   const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
@@ -67,10 +62,16 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
       // Check if MetaMask is installed
       if (window.ethereum) {
         try {
-          // For demo purposes, we'll use mock data
-          setCandidates(MOCK_CANDIDATES);
+          // For demo purposes, we'll use empty candidate data
+          setCandidates([]);
           setIsElectionActive(false);
           setHasVoted(false);
+          
+          // Check if user already has connected their wallet
+          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+          if (accounts.length > 0) {
+            await connectWalletInternal(accounts[0]);
+          }
         } catch (error) {
           console.error("Error initializing web3:", error);
         }
@@ -101,7 +102,34 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
       setIsConnected(false);
       toast.info("Wallet disconnected");
     } else {
-      setAccount(accounts[0]);
+      connectWalletInternal(accounts[0]);
+    }
+  };
+
+  const connectWalletInternal = async (accountAddress: string) => {
+    try {
+      const browserProvider = new ethers.BrowserProvider(window.ethereum);
+      setProvider(browserProvider);
+      setAccount(accountAddress);
+      
+      const signer = await browserProvider.getSigner();
+      setSigner(signer);
+      
+      // Initialize contract
+      const votingContract = new ethers.Contract(
+        MOCK_CONTRACT_ADDRESS, 
+        MOCK_CONTRACT_ABI, 
+        signer
+      );
+      setContract(votingContract);
+      
+      setIsConnected(true);
+      
+      // Simulate checking if the user has voted
+      setHasVoted(false);
+    } catch (error) {
+      console.error("Error in connectWalletInternal:", error);
+      throw error;
     }
   };
 
@@ -113,29 +141,11 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
 
     try {
       // Request account access
-      const browserProvider = new ethers.BrowserProvider(window.ethereum);
-      setProvider(browserProvider);
-      
-      const accounts = await browserProvider.send("eth_requestAccounts", []);
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       const account = accounts[0];
-      setAccount(account);
       
-      const signer = await browserProvider.getSigner();
-      setSigner(signer);
-      
-      // Initialize contract (in real app)
-      const votingContract = new ethers.Contract(
-        MOCK_CONTRACT_ADDRESS, 
-        MOCK_CONTRACT_ABI, 
-        signer
-      );
-      setContract(votingContract);
-      
-      setIsConnected(true);
+      await connectWalletInternal(account);
       toast.success("Wallet connected successfully!");
-      
-      // Simulate checking if the user has voted
-      setHasVoted(false);
     } catch (error) {
       console.error("Failed to connect wallet:", error);
       toast.error("Failed to connect wallet. Please try again.");
@@ -150,7 +160,7 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
     toast.info("Wallet disconnected");
   };
 
-  const addCandidate = async (name: string): Promise<boolean> => {
+  const addCandidate = async (name: string, description: string, image: string): Promise<boolean> => {
     if (!contract || !signer) {
       toast.error("Wallet not connected!");
       return false;
@@ -158,8 +168,18 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
 
     try {
       // Simulate adding a candidate
-      const newId = Math.max(...candidates.map(c => c.id), 0) + 1;
-      setCandidates([...candidates, { id: newId, name, voteCount: 0 }]);
+      const newId = candidates.length > 0 
+        ? Math.max(...candidates.map(c => c.id)) + 1 
+        : 1;
+        
+      setCandidates([...candidates, { 
+        id: newId, 
+        name, 
+        description, 
+        image, 
+        voteCount: 0 
+      }]);
+      
       toast.success(`Added candidate: ${name}`);
       return true;
     } catch (error) {
@@ -296,7 +316,6 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
 
     try {
       // In a real app, we would fetch candidates from the contract
-      // For demo, we'll use our mock data
       console.log("Refreshing candidates data...");
     } catch (error) {
       console.error("Error refreshing candidates:", error);

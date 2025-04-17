@@ -4,14 +4,25 @@ import { useBlockchain } from "@/context/BlockchainContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, CheckCircle, PlusCircle, PlayCircle, StopCircle } from "lucide-react";
+import { 
+  AlertCircle, 
+  CheckCircle, 
+  PlusCircle, 
+  PlayCircle, 
+  StopCircle,
+  ImageIcon,
+  Wallet
+} from "lucide-react";
 import { CandidateList } from "@/components/admin/CandidateList";
 import { ElectionResults } from "@/components/admin/ElectionResults";
 import { Badge } from "@/components/ui/badge";
 
 const AdminDashboard = () => {
   const [newCandidateName, setNewCandidateName] = useState("");
+  const [newCandidateDesc, setNewCandidateDesc] = useState("");
+  const [newCandidateImage, setNewCandidateImage] = useState("");
   const [isAddingCandidate, setIsAddingCandidate] = useState(false);
   const [isChangingElectionState, setIsChangingElectionState] = useState(false);
   
@@ -21,6 +32,8 @@ const AdminDashboard = () => {
     startElection,
     endElection,
     addCandidate,
+    isConnected,
+    connectWallet
   } = useBlockchain();
 
   const handleAddCandidate = async (e: React.FormEvent) => {
@@ -29,9 +42,15 @@ const AdminDashboard = () => {
     
     setIsAddingCandidate(true);
     try {
-      const success = await addCandidate(newCandidateName.trim());
+      const success = await addCandidate(
+        newCandidateName.trim(), 
+        newCandidateDesc.trim(), 
+        newCandidateImage.trim()
+      );
       if (success) {
         setNewCandidateName("");
+        setNewCandidateDesc("");
+        setNewCandidateImage("");
       }
     } finally {
       setIsAddingCandidate(false);
@@ -83,7 +102,7 @@ const AdminDashboard = () => {
           <Button 
             onClick={handleElectionStateChange}
             variant={isElectionActive ? "destructive" : "default"}
-            disabled={isChangingElectionState || candidates.length === 0}
+            disabled={isChangingElectionState || candidates.length === 0 || !isConnected}
             className="flex items-center gap-1"
           >
             {isElectionActive ? (
@@ -101,6 +120,27 @@ const AdminDashboard = () => {
         </div>
       </div>
 
+      {!isConnected && (
+        <Card className="bg-amber-50 border-amber-200">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="bg-amber-100 p-3 rounded-full">
+                <Wallet className="h-6 w-6 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-medium text-amber-800">Wallet Not Connected</h3>
+                <p className="text-amber-700 text-sm">
+                  Connect your wallet to manage the election.
+                </p>
+              </div>
+              <Button onClick={connectWallet} variant="outline" className="border-amber-300 text-amber-800">
+                Connect Wallet
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="md:col-span-1">
           <CardHeader>
@@ -114,14 +154,33 @@ const AdminDashboard = () => {
                   placeholder="Candidate Name"
                   value={newCandidateName}
                   onChange={(e) => setNewCandidateName(e.target.value)}
-                  disabled={isAddingCandidate || isElectionActive}
+                  disabled={isAddingCandidate || isElectionActive || !isConnected}
                 />
+              </div>
+              <div className="space-y-2">
+                <Textarea
+                  placeholder="Candidate Description"
+                  value={newCandidateDesc}
+                  onChange={(e) => setNewCandidateDesc(e.target.value)}
+                  disabled={isAddingCandidate || isElectionActive || !isConnected}
+                  className="min-h-[80px]"
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="Image URL"
+                    value={newCandidateImage}
+                    onChange={(e) => setNewCandidateImage(e.target.value)}
+                    disabled={isAddingCandidate || isElectionActive || !isConnected}
+                  />
+                </div>
               </div>
               <Button
                 type="submit"
                 variant="default"
                 className="w-full"
-                disabled={!newCandidateName.trim() || isAddingCandidate || isElectionActive}
+                disabled={!newCandidateName.trim() || isAddingCandidate || isElectionActive || !isConnected}
               >
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Add Candidate

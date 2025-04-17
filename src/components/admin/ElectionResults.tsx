@@ -2,11 +2,13 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ArrowDown, ArrowUp, Award } from "lucide-react";
+import { ArrowDown, ArrowUp, Award, User } from "lucide-react";
 
 interface Candidate {
   id: number;
   name: string;
+  description: string;
+  image: string;
   voteCount: number;
 }
 
@@ -73,15 +75,33 @@ export function ElectionResults({ candidates, isActive }: ElectionResultsProps) 
         return (
           <Card key={candidate.id} className="overflow-hidden">
             <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center">
-                  <span className="font-medium">{candidate.name}</span>
-                  {isLeading && (
-                    <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
-                      <Award className="h-3 w-3 mr-1" />
-                      Leading
-                    </span>
+              <div className="flex items-center mb-2">
+                <div className="h-8 w-8 rounded-full overflow-hidden mr-3">
+                  {candidate.image ? (
+                    <img 
+                      src={candidate.image} 
+                      alt={candidate.name} 
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Candidate';
+                      }}
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-primary/10 flex items-center justify-center">
+                      <User className="h-4 w-4 text-primary" />
+                    </div>
                   )}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center">
+                    <span className="font-medium">{candidate.name}</span>
+                    {isLeading && (
+                      <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                        <Award className="h-3 w-3 mr-1" />
+                        Leading
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="text-sm font-medium">
                   {candidate.voteCount} votes ({percentage.toFixed(1)}%)
@@ -89,8 +109,6 @@ export function ElectionResults({ candidates, isActive }: ElectionResultsProps) 
               </div>
               <Progress 
                 value={percentage} 
-                className="h-2"
-                // Apply special styling conditionally without using an invalid prop
                 className={isLeading ? "h-2 [&>div]:bg-blockchain-accent" : "h-2"}
               />
             </CardContent>

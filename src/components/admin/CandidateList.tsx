@@ -8,6 +8,8 @@ import { useState } from "react";
 interface Candidate {
   id: number;
   name: string;
+  description: string;
+  image: string;
   voteCount: number;
 }
 
@@ -43,16 +45,30 @@ export function CandidateList({ candidates }: CandidateListProps) {
       {candidates.map((candidate) => (
         <Card key={candidate.id} className="overflow-hidden">
           <CardContent className="p-0">
-            <div className="flex items-center p-4">
-              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center mr-4">
-                <User className="h-5 w-5 text-primary" />
+            <div className="flex items-start p-4">
+              <div className="h-16 w-16 rounded-full overflow-hidden mr-4 flex-shrink-0">
+                {candidate.image ? (
+                  <img 
+                    src={candidate.image} 
+                    alt={candidate.name} 
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Candidate';
+                    }}
+                  />
+                ) : (
+                  <div className="h-full w-full bg-primary/10 flex items-center justify-center">
+                    <User className="h-8 w-8 text-primary" />
+                  </div>
+                )}
               </div>
               <div className="flex-1">
                 <h3 className="text-lg font-medium">{candidate.name}</h3>
-                <p className="text-sm text-muted-foreground">Candidate #{candidate.id}</p>
+                <p className="text-sm text-muted-foreground mb-1">Candidate #{candidate.id}</p>
+                <p className="text-sm">{candidate.description}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="text-sm text-muted-foreground flex items-center mr-4">
+              <div className="flex flex-col items-end gap-2 ml-4">
+                <div className="text-sm text-muted-foreground flex items-center">
                   <Award className="h-4 w-4 mr-1" />
                   <span>{candidate.voteCount} votes</span>
                 </div>

@@ -8,6 +8,8 @@ import { useBlockchain } from "@/context/BlockchainContext";
 interface Candidate {
   id: number;
   name: string;
+  description: string;
+  image: string;
   voteCount: number;
 }
 
@@ -63,13 +65,27 @@ export function CandidateVoteCard({
   return (
     <Card className="overflow-hidden border border-muted">
       <CardContent className="p-0">
-        <div className="flex items-center p-4">
-          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center mr-4">
-            <UserRound className="h-5 w-5 text-primary" />
+        <div className="flex items-start p-4">
+          <div className="h-16 w-16 rounded-full overflow-hidden mr-4 flex-shrink-0">
+            {candidate.image ? (
+              <img 
+                src={candidate.image} 
+                alt={candidate.name} 
+                className="h-full w-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Candidate';
+                }}
+              />
+            ) : (
+              <div className="h-full w-full bg-primary/10 flex items-center justify-center">
+                <UserRound className="h-8 w-8 text-primary" />
+              </div>
+            )}
           </div>
           <div className="flex-1">
             <h3 className="text-lg font-medium">{candidate.name}</h3>
-            <p className="text-sm text-muted-foreground">Candidate #{candidate.id}</p>
+            <p className="text-sm text-muted-foreground mb-1">Candidate #{candidate.id}</p>
+            <p className="text-sm">{candidate.description}</p>
           </div>
           <Button
             variant="default"
@@ -79,6 +95,7 @@ export function CandidateVoteCard({
             className={`
               ${hasVoted ? "bg-green-600 hover:bg-green-700" : ""}
               ${isConfirming || isVoting ? "animate-pulse" : ""}
+              ml-4
             `}
           >
             {getButtonContent()}
