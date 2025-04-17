@@ -2,6 +2,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { toast } from 'sonner';
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from './AuthContext';
 
 // Mock contract ABI & address - In a real app, this would be generated from your Solidity contract
 const MOCK_CONTRACT_ABI = [
@@ -55,18 +57,14 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
   const [isElectionActive, setIsElectionActive] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
   const [isVoting, setIsVoting] = useState(false);
+  const { user } = useAuth();
 
-  // Initialize web3 when component mounts
+  // Initialize web3 and load data when component mounts
   useEffect(() => {
     const initWeb3 = async () => {
       // Check if MetaMask is installed
       if (window.ethereum) {
         try {
-          // For demo purposes, we'll use empty candidate data
-          setCandidates([]);
-          setIsElectionActive(false);
-          setHasVoted(false);
-          
           // Check if user already has connected their wallet
           const accounts = await window.ethereum.request({ method: 'eth_accounts' });
           if (accounts.length > 0) {
@@ -81,6 +79,8 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
     };
 
     initWeb3();
+    fetchCandidatesFromSupabase();
+    fetchElectionStatus();
   }, []);
 
   // Add listeners for account changes
@@ -94,6 +94,30 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
       };
     }
   }, []);
+
+  // Check if user has voted
+  useEffect(() => {
+    const checkIfUserHasVoted = async () => {
+      if (user && isElectionActive) {
+        try {
+          const { data } = await supabase
+            .from('votes')
+            .select('id')
+            .eq('voter_id', user.id)
+            .single();
+          
+          setHasVoted(!!data);
+        } catch (error) {
+          console.error("Error checking if user has voted:", error);
+          setHasVoted(false);
+        }
+      } else {
+        setHasVoted(false);
+      }
+    };
+
+    checkIfUserHasVoted();
+  }, [user, isElectionActive]);
 
   const handleAccountChange = (accounts: string[]) => {
     if (accounts.length === 0) {
@@ -124,12 +148,67 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
       setContract(votingContract);
       
       setIsConnected(true);
-      
-      // Simulate checking if the user has voted
-      setHasVoted(false);
     } catch (error) {
       console.error("Error in connectWalletInternal:", error);
       throw error;
+    }
+  };
+
+  const fetchCandidatesFromSupabase = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('candidates')
+        .select('*')
+        .order('id', { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      // Transform the data to match our Candidate interface
+      const candidatesData = data.map(candidate => ({
+        id: candidate.id,
+        name: candidate.name,
+        description: candidate.description || '',
+        image: candidate.image_path || '',
+        voteCount: candidate.vote_count
+      }));
+
+      setCandidates(candidatesData);
+    } catch (error) {
+      console.error("Error fetching candidates:", error);
+      toast.error("Failed to load candidates");
+    }
+  };
+
+  const fetchElectionStatus = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('elections')
+        .select('is_active')
+        .eq('id', 1) // Assuming we're using a single election record
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No election record yet, create one
+          const { error: insertError } = await supabase
+            .from('elections')
+            .insert({ is_active: false });
+          
+          if (insertError) {
+            throw insertError;
+          }
+          
+          setIsElectionActive(false);
+        } else {
+          throw error;
+        }
+      } else if (data) {
+        setIsElectionActive(data.is_active);
+      }
+    } catch (error) {
+      console.error("Error fetching election status:", error);
     }
   };
 
@@ -161,27 +240,45 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
   };
 
   const addCandidate = async (name: string, description: string, image: string): Promise<boolean> => {
-    if (!contract || !signer) {
-      toast.error("Wallet not connected!");
+    if (!user) {
+      toast.error("You must be logged in to add a candidate!");
       return false;
     }
 
     try {
-      // Simulate adding a candidate
-      const newId = candidates.length > 0 
-        ? Math.max(...candidates.map(c => c.id)) + 1 
-        : 1;
+      // Add candidate to Supabase
+      const { data, error } = await supabase
+        .from('candidates')
+        .insert({
+          name: name,
+          description: description,
+          image_path: image,
+          created_by: user.id
+        })
+        .select();
+
+      if (error) {
+        console.error("Error adding candidate to Supabase:", error);
+        toast.error("Failed to add candidate to database");
+        return false;
+      }
+
+      if (data && data.length > 0) {
+        // Add the new candidate to the local state
+        const newCandidate: Candidate = {
+          id: data[0].id,
+          name: data[0].name,
+          description: data[0].description || '',
+          image: data[0].image_path || '',
+          voteCount: 0
+        };
         
-      setCandidates([...candidates, { 
-        id: newId, 
-        name, 
-        description, 
-        image, 
-        voteCount: 0 
-      }]);
+        setCandidates(prev => [...prev, newCandidate]);
+        toast.success(`Added candidate: ${name}`);
+        return true;
+      }
       
-      toast.success(`Added candidate: ${name}`);
-      return true;
+      return false;
     } catch (error) {
       console.error("Error adding candidate:", error);
       toast.error("Failed to add candidate");
@@ -190,8 +287,8 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
   };
 
   const removeCandidate = async (id: number): Promise<boolean> => {
-    if (!contract || !signer) {
-      toast.error("Wallet not connected!");
+    if (!user) {
+      toast.error("You must be logged in to remove a candidate!");
       return false;
     }
 
@@ -201,7 +298,19 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
     }
 
     try {
-      // Simulate removing a candidate
+      // Remove candidate from Supabase
+      const { error } = await supabase
+        .from('candidates')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error("Error removing candidate from Supabase:", error);
+        toast.error("Failed to remove candidate from database");
+        return false;
+      }
+
+      // Remove from local state if successful
       setCandidates(candidates.filter(candidate => candidate.id !== id));
       toast.success("Candidate removed successfully");
       return true;
@@ -213,13 +322,21 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
   };
 
   const startElection = async (): Promise<boolean> => {
-    if (!contract || !signer) {
-      toast.error("Wallet not connected!");
+    if (!user) {
+      toast.error("You must be logged in to start an election!");
       return false;
     }
 
     try {
-      // Simulate starting an election
+      const { error } = await supabase
+        .from('elections')
+        .update({ is_active: true, started_at: new Date().toISOString() })
+        .eq('id', 1);
+
+      if (error) {
+        throw error;
+      }
+
       setIsElectionActive(true);
       toast.success("Election started successfully!");
       return true;
@@ -231,13 +348,24 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
   };
 
   const endElection = async (): Promise<boolean> => {
-    if (!contract || !signer) {
-      toast.error("Wallet not connected!");
+    if (!user) {
+      toast.error("You must be logged in to end an election!");
       return false;
     }
 
     try {
-      // Simulate ending an election
+      const { error } = await supabase
+        .from('elections')
+        .update({ 
+          is_active: false, 
+          ended_at: new Date().toISOString() 
+        })
+        .eq('id', 1);
+
+      if (error) {
+        throw error;
+      }
+
       setIsElectionActive(false);
       toast.success("Election ended successfully!");
       return true;
@@ -249,7 +377,12 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
   };
 
   const vote = async (candidateId: number): Promise<boolean> => {
-    if (!contract || !signer) {
+    if (!user) {
+      toast.error("You must be logged in to vote!");
+      return false;
+    }
+
+    if (!isConnected) {
       toast.error("Wallet not connected!");
       return false;
     }
@@ -268,22 +401,49 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
 
     try {
       // In a real app, this would be a contract call that costs gas
-      // Simulate a MetaMask transaction that might fail
+      // Simulate a MetaMask transaction
       
       // Create a simulated transaction
       const tx = {
         to: MOCK_CONTRACT_ADDRESS,
         value: ethers.parseEther("0"), // No ETH sent
-        data: contract.interface.encodeFunctionData("vote", [candidateId]),
+        data: contract?.interface.encodeFunctionData("vote", [candidateId]),
         gasLimit: ethers.getBigInt(100000)
       };
       
       // Send the transaction - this will trigger MetaMask
-      const txResponse = await signer.sendTransaction(tx);
+      const txResponse = await signer?.sendTransaction(tx);
       
       // Wait for one confirmation
       toast.info("Confirming your vote on the blockchain...");
-      await txResponse.wait(1);
+      
+      if (txResponse) {
+        await txResponse.wait(1);
+      }
+      
+      // Record the vote in Supabase
+      const { error: voteError } = await supabase
+        .from('votes')
+        .insert({
+          voter_id: user.id,
+          candidate_id: candidateId
+        });
+
+      if (voteError) {
+        console.error("Error recording vote in database:", voteError);
+        toast.error("Failed to record your vote in the database");
+        return false;
+      }
+      
+      // Update the vote count for the candidate
+      const { error: updateError } = await supabase
+        .from('candidates')
+        .update({ vote_count: candidates.find(c => c.id === candidateId)?.voteCount! + 1 })
+        .eq('id', candidateId);
+
+      if (updateError) {
+        console.error("Error updating candidate vote count:", updateError);
+      }
       
       // Update the UI after confirmation
       const updatedCandidates = candidates.map(c =>
@@ -309,18 +469,7 @@ export const BlockchainProvider = ({ children }: { children: React.ReactNode }) 
   };
 
   const refreshCandidates = async (): Promise<void> => {
-    if (!contract) {
-      console.warn("Contract not initialized");
-      return;
-    }
-
-    try {
-      // In a real app, we would fetch candidates from the contract
-      console.log("Refreshing candidates data...");
-    } catch (error) {
-      console.error("Error refreshing candidates:", error);
-      toast.error("Failed to refresh candidate data");
-    }
+    await fetchCandidatesFromSupabase();
   };
 
   return (
