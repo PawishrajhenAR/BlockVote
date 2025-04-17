@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
@@ -7,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { KeyRound, UserRound, Mail } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const Login = () => {
   // Login state
@@ -19,6 +19,7 @@ const Login = () => {
   const [signupPassword, setSignupPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [signupLoading, setSignupLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   
   const { login, signUp } = useAuth();
   const navigate = useNavigate();
@@ -47,7 +48,7 @@ const Login = () => {
     setSignupLoading(true);
     
     try {
-      const success = await signUp(signupEmail, signupPassword);
+      const success = await signUp(signupEmail, signupPassword, isAdmin);
       if (success) {
         // Stay on login page but switch to login tab
         document.getElementById('login-tab')?.click();
@@ -170,6 +171,20 @@ const Login = () => {
                         required
                       />
                     </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="isAdmin" 
+                      checked={isAdmin}
+                      onCheckedChange={(checked) => setIsAdmin(!!checked)}
+                    />
+                    <label
+                      htmlFor="isAdmin"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      Create as Admin Account
+                    </label>
                   </div>
                 </CardContent>
                 

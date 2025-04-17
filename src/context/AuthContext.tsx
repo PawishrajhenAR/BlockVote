@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +7,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   login: (email: string, password: string) => Promise<boolean>;
-  signUp: (email: string, password: string) => Promise<boolean>;
+  signUp: (email: string, password: string, isAdmin?: boolean) => Promise<boolean>;
   logout: () => void;
   isAdmin: boolean;
   isVoter: boolean;
@@ -26,13 +25,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const setupAuth = async () => {
-      // Set up auth state listener FIRST
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         (event, currentSession) => {
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
           
-          // Defer profile fetch to avoid any potential auth deadlocks
           if (currentSession?.user) {
             setTimeout(() => {
               fetchUserRole(currentSession.user.id);
@@ -44,7 +41,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       );
 
-      // THEN check for existing session
       const { data: { session: initialSession } } = await supabase.auth.getSession();
       setSession(initialSession);
       setUser(initialSession?.user ?? null);
@@ -111,7 +107,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const signUp = async (email: string, password: string): Promise<boolean> => {
+  const signUp = async (email: string, password: string, isAdmin: boolean = false): Promise<boolean> => {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -124,6 +120,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (data.user) {
+        if (isAdmin) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .update({ role: 'admin' })
+            .eq('id', data.user.id);
+
+          if (profileError) {
+            console.error('Error setting admin role:', profileError);
+            toast.error('Could not set admin role');
+            return false;
+          }
+        }
+
         toast.success('Account created successfully! Please verify your email.');
         return true;
       }
