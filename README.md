@@ -46,3 +46,4 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+Hope you had fun using our project
