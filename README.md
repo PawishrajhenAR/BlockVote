@@ -46,4 +46,7 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
-Hope you had fun using our project
+Have a code DAY
+
+![YourVoteMattersVotingMattersGIF](https://github.com/user-attachments/assets/b6b64297-c845-47a9-a26f-232a4af10d75)
+
